@@ -1,11 +1,10 @@
 fastapi
 uvicorn[standard]
-pypdf
-sentence-transformers
 chromadb
 google-genai
+pypdf
 pytest
 httpx
 python-dotenv
-pyJWT
+PyJWT
 pwdlib[argon2]
