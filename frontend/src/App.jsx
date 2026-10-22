@@ -2,6 +2,11 @@
 import { useState, useRef, useEffect } from "react";
 import "./App.css";
 
+const API_URL = (
+  import.meta.env.VITE_API_URL ||
+  "https://tn-scheme-ai.onrender.com"
+).replace(/\/+$/, "");
+
 const suggestions = [
   {
     icon: "🎓",
@@ -27,6 +32,18 @@ const suggestions = [
       "What financial assistance schemes are available for students?",
   },
 ];
+
+async function readResponse(response) {
+  const responseText = await response.text();
+
+  try {
+    return JSON.parse(responseText);
+  } catch {
+    throw new Error(
+      `Server returned a non-JSON response (HTTP ${response.status}). Please check the API URL and backend deployment.`
+    );
+  }
+}
 
 function App() {
   // Chat state
@@ -66,7 +83,7 @@ function App() {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, loading]);
 
-  // Register and login
+  // Login and registration
   async function handleAuthSubmit(event) {
     event.preventDefault();
     setAuthError("");
@@ -82,29 +99,30 @@ function App() {
     setAuthLoading(true);
 
     try {
-      const response = await fetch(
-        isRegister ? "/api/auth/register" : "/api/auth/login",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(
-            isRegister
-              ? {
-                  name: authName.trim(),
-                  email: authEmail.trim(),
-                  password: authPassword,
-                }
-              : {
-                  email: authEmail.trim(),
-                  password: authPassword,
-                }
-          ),
-        }
-      );
+      const endpoint = isRegister
+        ? "/auth/register"
+        : "/auth/login";
 
-      const data = await response.json();
+      const response = await fetch(`${API_URL}${endpoint}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(
+          isRegister
+            ? {
+                name: authName.trim(),
+                email: authEmail.trim(),
+                password: authPassword,
+              }
+            : {
+                email: authEmail.trim(),
+                password: authPassword,
+              }
+        ),
+      });
+
+      const data = await readResponse(response);
 
       if (!response.ok) {
         throw new Error(
@@ -124,7 +142,9 @@ function App() {
         );
       } else {
         if (!data.access_token || !data.user) {
-          throw new Error("The server returned an invalid login response.");
+          throw new Error(
+            "The server returned an invalid login response."
+          );
         }
 
         localStorage.setItem("schemeai_token", data.access_token);
@@ -144,7 +164,7 @@ function App() {
     } catch (err) {
       setAuthError(
         err.message === "Failed to fetch"
-          ? "Cannot connect to the backend. Check FastAPI and Vite."
+          ? "Cannot connect to the backend. Please check the backend URL and CORS settings."
           : err.message
       );
     } finally {
@@ -173,10 +193,12 @@ function App() {
     setAuthSuccess("");
     setAuthEmail("");
     setAuthPassword("");
+    setAuthName("");
+    setAuthConfirmPassword("");
     setAuthMode("login");
   }
 
-  // Existing chatbot
+  // Chatbot API
   async function sendQuestion(text = question) {
     const value = text.trim();
 
@@ -193,7 +215,7 @@ function App() {
     setLoading(true);
 
     try {
-      const response = await fetch("/api/chat", {
+      const response = await fetch(`${API_URL}/chat`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -202,7 +224,7 @@ function App() {
         body: JSON.stringify({ question: value }),
       });
 
-      const data = await response.json();
+      const data = await readResponse(response);
 
       if (response.status === 401 || response.status === 403) {
         handleLogout();
@@ -213,7 +235,9 @@ function App() {
 
       if (!response.ok) {
         throw new Error(
-          data.detail || "Unable to get an answer. Please try again."
+          typeof data.detail === "string"
+            ? data.detail
+            : "Unable to get an answer. Please try again."
         );
       }
 
@@ -228,7 +252,7 @@ function App() {
     } catch (err) {
       setError(
         err.message === "Failed to fetch"
-          ? "Cannot connect to the backend. Please check whether FastAPI is running."
+          ? "Cannot connect to the backend. Check the backend URL and CORS settings."
           : err.message
       );
     } finally {
@@ -246,7 +270,7 @@ function App() {
     inputRef.current?.focus();
   }
 
-  // Login screen appears first
+  // Login screen
   if (!token) {
     return (
       <div className="auth-page">
@@ -293,7 +317,9 @@ function App() {
                   type="text"
                   placeholder="Enter your name"
                   value={authName}
-                  onChange={(event) => setAuthName(event.target.value)}
+                  onChange={(event) =>
+                    setAuthName(event.target.value)
+                  }
                   minLength={2}
                   maxLength={100}
                   autoComplete="name"
@@ -308,7 +334,9 @@ function App() {
                 type="email"
                 placeholder="you@example.com"
                 value={authEmail}
-                onChange={(event) => setAuthEmail(event.target.value)}
+                onChange={(event) =>
+                  setAuthEmail(event.target.value)
+                }
                 maxLength={254}
                 autoComplete="email"
                 required
@@ -386,7 +414,7 @@ function App() {
     );
   }
 
-  // Existing SchemeAI chatbot dashboard
+  // Chatbot dashboard
   return (
     <div className="app-shell">
       <aside className="sidebar">
